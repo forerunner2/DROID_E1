@@ -284,14 +284,8 @@ python test/leg_base_test.py --host localhost --port 50051
 - `droidup_mujoco/simulate/droidup_mujoco.py`
   - MuJoCo gRPC 假后端入口
 
-## 8. 已知问题
 
-- 历史文档存在编码问题，旧版中文 `readme` 打开时可能显示乱码。
-- `Droid_lab/legged_lab/scripts/play_mujo.py` 当前引用了仓库中不存在的 `deploy.sim2mujo_x2r`。
-- `Droid_lab/deploy/script/deploy_rl.sh` 中引用的 `sim2real_x2r.py` 当前仓库中未发现。
-- 因为训练环境与部署环境依赖差异较大，强烈建议分开管理 conda 环境。
-
-## 9. 建议的最小验证闭环
+## 8. 建议的最小验证闭环
 
 1. 在 `Droid_lab` 中完成一次训练，确认 `logs/<experiment>/<timestamp>/` 正常生成。
 2. 确认 `Droid_lab/deploy/policies/` 下存在 `policy.onnx` 和 `env_cfg.json`。
