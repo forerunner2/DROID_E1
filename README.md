@@ -292,7 +292,3 @@ python test/leg_base_test.py --host localhost --port 50051
 3. 运行 `Droid_lab/deploy/sim2mujo_E1.py`，验证 sim2sim。
 4. 启动 `droidup_mujoco/simulate/droidup_mujoco.py`。
 5. 再运行 `Droid_lab/deploy/sim2real_E1.py`，验证 sim2real(fake) 控制闭环。
-
-## 10. 备注
-
-仓库根目录下的 `PROJECT_ANALYSIS.md` 与 `PROJECT_STRUCTURE.md` 是补充分析文档，可作为理解当前工程结构的参考，但以本 `README.md` 作为统一入口说明。
