@@ -1,0 +1,164 @@
+import math
+import time
+import numpy as np
+from tqdm import tqdm
+import onnxruntime as ort
+from base.LegBase import LegBase
+from base.ArmBase import ArmBase
+from base.Base import get_command
+from tools.Gamepad import GamepadHandler
+from tools.CircularBuffer import CircularBuffer
+from tools.load_env_config_DOG import load_configuration
+from base.Base import NanoSleep, euler_to_quaternion, quat_rotate_inverse
+from scipy.spatial.transform import Rotation as R
+
+onnx_mode_path = f"policies/policy.onnx"
+
+IsaacLabJointOrder = ['FL_thigh_joint', 'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 'FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 'FL_calf_joint', 'FR_calf_joint', 'RL_calf_joint', 'RR_calf_joint']
+RealJointOrder     = ['FL_thigh_joint', 'FL_hip_joint', 'FL_calf_joint', 'FR_thigh_joint', 'FR_hip_joint', 'FR_calf_joint', 'RL_thigh_joint', 'RL_hip_joint', 'RL_calf_joint', 'RR_thigh_joint','RR_hip_joint', 'RR_calf_joint']
+# 找到 IsaacLabJointOrder 中每个关节在 MujocoJointOrder 中的索引-30*D2R,  0*D2R,  0*D2R,  60*D2R, -30*D2R,  0*D2R
+# Mujoco_to_Isaac_indices = [MujocoJointOrder.index(joint) for joint in IsaacLabJointOrder]
+Isaac_to_Real_indices = [IsaacLabJointOrder.index(joint) for joint in RealJointOrder]
+# 找到 MujocoJointOrder 中每个关节在 IsaacLabJointOrder 中的索引
+# Isaac_to_Mujoco_indices = [IsaacLabJointOrder.index(joint) for joint in MujocoJointOrder]
+Real_to_Isaac_indices = [RealJointOrder.index(joint) for joint in IsaacLabJointOrder]
+
+class Sim2Real(ArmBase, LegBase):
+    def __init__(self):
+        ArmBase.__init__(self)
+        LegBase.__init__(self)
+        self.num_actions = 12
+        self.num_observations = 45
+        self.gait_frequency = 0
+        self.cfg = load_configuration("policies/env_cfg.json", RealJointOrder)
+        self.run_flag = True
+        # joint target
+        self.command = [0., 0., 0.]
+        self.target_q = np.zeros(self.num_actions, dtype=np.double)
+        self.action = np.zeros(self.num_actions, dtype=np.double)
+        self.onnx_policy = ort.InferenceSession(onnx_mode_path)
+        buffer_length = self.cfg.hist_length if self.cfg.hist_length > 0 else 1
+        self.hist_obs = CircularBuffer(self.num_observations, buffer_length)
+        self.rc = GamepadHandler()
+
+    def init_robot(self):
+        print("default_joints: ", self.cfg.default_joints)
+        arm_init_pos = np.concatenate((self.cfg.default_joints[0:2], [0.0], self.cfg.default_joints[2:5],[0.0], [self.cfg.default_joints[5]]))
+        leg_init_pos = np.concatenate((self.cfg.default_joints[6:8], [0.0], self.cfg.default_joints[8:11],[0.0], [self.cfg.default_joints[11]]))
+        self.set_arm_path(1, arm_init_pos)
+        self.set_leg_path(1, leg_init_pos)
+        timer = NanoSleep(self.cfg.decimation)  # 创建一个decimation毫秒的NanoSleep对象
+        print("单击三开始, LT按压到底到底急停")
+        while (self.rc.state.START == False) and (self.run_flag == True):  # CH6
+            start_time = time.perf_counter()
+            self.get_leg_state()
+            if self.rc.state.LT > 64:
+                print("紧急停止！！！")
+                exit()
+            timer.waiting(start_time)
+
+    def update_rc_command(self):
+        self.command[0] = get_command(self.command[0], self.rc.state.LEFT_Y   * 1.0, 0.05)
+        self.command[1] = get_command(self.command[1], self.rc.state.RIGHT_X  * 1.0, 0.05)
+        self.command[2] = get_command(self.command[2], self.rc.state.LEFT_X   * 1.0, 0.05)
+        self.gait_frequency = 1.0
+
+    def get_gravity_orientation_from_rpy(self, roll, pitch):
+        rot = R.from_euler('xy', [roll, pitch])
+        g_world = np.array([0, 0, -1])
+        g_local = rot.inv().apply(g_world)
+        return g_local
+
+    def get_obs(self, gait_process):
+        q = np.concatenate((self.armState.position[0:2], [self.armState.position[3]], self.armState.position[4:6], [self.armState.position[7]], self.legState.position[0:2], [self.legState.position[3]], self.legState.position[4:6], [self.legState.position[7]]))
+        dq = np.concatenate((self.armState.velocity[0:2], [self.armState.velocity[3]], self.armState.velocity[4:6], [self.armState.velocity[7]], self.legState.velocity[0:2], [self.legState.velocity[3]], self.legState.velocity[4:6], [self.legState.velocity[7]]))
+
+        base_euler = np.array(self.legState.imu_euler)
+        base_ang_vel = np.array(self.legState.imu_gyro)
+
+        base_euler[base_euler > math.pi] -= 2 * math.pi
+        eq = euler_to_quaternion(base_euler[0], base_euler[1], base_euler[2])
+        # eq[1] =eq[1] + 0.05
+        eq = np.array(eq, dtype=np.double)
+        project_gravity = quat_rotate_inverse(eq, np.array([0., 0., -1]))
+        # project_gravity =  self.get_gravity_orientation_from_rpy(base_euler[0], base_euler[1])
+        self.update_rc_command()
+
+        obs = np.zeros([self.num_observations], dtype=np.float32)
+        obs[0:3] = base_ang_vel * 0.2
+        obs[3:6] = project_gravity
+        obs[6:9] = self.command
+        # obs[9] = np.cos(2 * np.pi * gait_process) * (self.gait_frequency > 1.0e-8)
+        # obs[10] = np.sin(2 * np.pi * gait_process) * (self.gait_frequency > 1.0e-8)
+        obs[9: 21] = (q- self.cfg.default_joints)[Real_to_Isaac_indices]
+        obs[21: 33] = dq[Real_to_Isaac_indices] * 0.05
+        obs[33: 45] = self.action[Real_to_Isaac_indices]
+        obs = np.clip(obs, -100, 100)
+        return q, dq, obs
+
+    def get_action(self, obs):
+        obs = [np.array(obs, dtype=np.float32)]
+        action =np.array(self.onnx_policy.run(None, {"obs": obs})[0].tolist()[0])
+        self.action = np.clip(action[Isaac_to_Real_indices], -100.0,100.0)
+        return self.action * self.cfg.action_scale  + self.cfg.default_joints
+
+    def run(self):
+        pre_tic = 0
+        gait_process = 0
+        duration_second = self.cfg.decimation * self.cfg.dt  # 单位:s
+        duration_millisecond = duration_second * 1000  # 单位：ms
+        timer = NanoSleep(duration_millisecond)  # 创建一个decimation毫秒的NanoSleep对象
+        pbar = tqdm(range(int(0xfffffff0 / duration_second)),
+                    desc="E1 running...")  # x * 0.001, ms -> s
+        start = time.perf_counter()
+        for _ in pbar:
+            start_time = time.perf_counter()
+            self.get_leg_state()
+            if self.rc.state.LT > 64:
+                print("紧急停止！！！")
+                exit()
+            q, dq, obs = self.get_obs(gait_process)
+            self.hist_obs.append(obs)
+            self.target_q = self.get_action(self.hist_obs.get())
+            for idx in range(self.armActions):
+                if idx <= 1:
+                    self.armCommand.position[idx] = self.target_q[idx]
+                elif idx == 2:
+                    self.armCommand.position[idx] = 0.0
+                elif idx > 2 and idx <= 5:
+                    self.armCommand.position[idx] = self.target_q[idx-1]
+                elif idx == 6:
+                    self.armCommand.position[idx] = 0.0
+                else:
+                    self.armCommand.position[idx] = self.target_q[idx-2]
+
+            for idx in range(self.legActions):
+                if idx <= 1:
+                    self.legCommand.position[idx] = self.target_q[idx+6]
+                elif idx == 2:
+                    self.legCommand.position[idx] = 0.0
+                elif idx > 2 and idx <= 5:
+                    self.legCommand.position[idx] = self.target_q[idx+6-1]
+                elif idx == 6:
+                    self.legCommand.position[idx] = 0.0
+                else:
+                    self.legCommand.position[idx] = self.target_q[idx+6-2]
+
+            self.set_arm_command()
+            self.set_leg_command()
+            pbar.set_postfix(
+                realCycle=f"{self.legState.system_tic - pre_tic}ms",  # 实际循环周期，单位毫秒
+                calculateTime=f"{(time.perf_counter() - start_time) * 1000:.3f}ms",  # 计算用时，单位毫秒
+                runTime=f"{(time.perf_counter() - start):.3f}s"  # 运行时间，单位秒
+            )
+            pre_tic = self.legState.system_tic
+            gait_process = np.fmod(gait_process + duration_second * self.gait_frequency, 1.0)
+            timer.waiting(start_time)
+        self.set_leg_path(1, self.cfg.default_joints)
+
+
+if __name__ == '__main__':
+    mybot = Sim2Real()
+    mybot.init_robot()   # 屈膝状态
+    time.sleep(1)
+    mybot.run()

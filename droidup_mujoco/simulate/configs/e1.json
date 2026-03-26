@@ -1,0 +1,87 @@
+{
+  "dt": 0.0025,
+  "decimation": 4,
+  "standing_height": 0.744,
+  "action_scale": 0.25,
+  "hist_length": 10,
+  "defaults": {
+    "kp": 100.0,
+    "kd": 2.0,
+    "effort": 80.0,
+    "default": 0.0
+  },
+  "joints": {
+    "left_hip_pitch_joint": {
+      "kp": 200.0,
+      "kd": 5.0,
+      "effort": 60.0,
+      "default": -0.3
+    },
+    "left_hip_roll_joint": {
+      "kp": 100.0,
+      "kd": 5.0,
+      "effort": 36.0,
+      "default": 0.0
+    },
+    "left_hip_yaw_joint": {
+      "kp": 100.0,
+      "kd": 3.0,
+      "effort": 36.0,
+      "default": 0.0
+    },
+    "left_knee_joint": {
+      "kp": 200.0,
+      "kd": 5.0,
+      "effort": 36.0,
+      "default": 0.6
+    },
+    "left_ankle_pitch_joint": {
+      "kp": 20.0,
+      "kd": 2.0,
+      "effort": 28.0,
+      "default": -0.3
+    },
+    "left_ankle_roll_joint": {
+      "kp": 10.0,
+      "kd": 1.0,
+      "effort": 14.0,
+      "default": 0.0
+    },
+    "right_hip_pitch_joint": {
+      "kp": 200.0,
+      "kd": 5.0,
+      "effort": 60.0,
+      "default": -0.3
+    },
+    "right_hip_roll_joint": {
+      "kp": 100.0,
+      "kd": 5.0,
+      "effort": 36.0,
+      "default": 0.0
+    },
+    "right_hip_yaw_joint": {
+      "kp": 100.0,
+      "kd": 3.0,
+      "effort": 36.0,
+      "default": 0.0
+    },
+    "right_knee_joint": {
+      "kp": 200.0,
+      "kd": 5.0,
+      "effort": 36.0,
+      "default": 0.6
+    },
+    "right_ankle_pitch_joint": {
+      "kp": 20.0,
+      "kd": 2.0,
+      "effort": 28.0,
+      "default": -0.3
+    },
+    "right_ankle_roll_joint": {
+      "kp": 10.0,
+      "kd": 1.0,
+      "effort": 14.0,
+      "default": 0.0
+    }
+  }
+}

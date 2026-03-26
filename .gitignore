@@ -1,0 +1,11 @@
+**/__pycache__/
+*.pyc
+*.egg-info/
+.vscode/
+.idea/
+outputs/
+wandb/
+run_bash.sh
+*rsl_rl*
+
+Droid_lab/logs/
