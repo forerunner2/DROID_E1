@@ -11,8 +11,9 @@
 
 ## 演示视频
 
-- `sim2sim`：[`media/sim2sim.mp4`](media/sim2sim.mp4)
-- `sim2real`：[`media/sim2real.mp4`](media/sim2real.mp4)
+[![sim2sim](media/sim2sim-cover.png)](media/sim2sim.mp4)
+
+[![sim2real](media/sim2real-cover.png)](media/sim2real.mp4)
 
 ## 1. 项目目标
 
