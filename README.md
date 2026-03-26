@@ -264,12 +264,6 @@ cd droidup_mujoco
 python test/leg_base_test.py --host localhost --port 50051
 ```
 
-手臂接口测试：
-
-```bash
-cd droidup_mujoco
-python test/arm_base_test.py --host localhost --port 50052
-```
 
 ## 7. 关键文件说明
 
